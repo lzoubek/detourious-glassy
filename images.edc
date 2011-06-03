@@ -452,6 +452,9 @@ image: "images/temperature-60.png" COMP;
 image: "images/temperature-80.png" COMP;
 image: "images/temperature-100.png" COMP;
 
+//~ notification 
+image: "images/notification.png" COMP;
+
 //~ misc images 
 image: "images/screen_im0.png" COMP;
 

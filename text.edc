@@ -137,9 +137,9 @@ styles {
 	}
 	style {
 		name: "notification_style";
-		base: "font="FONT" font_size=8 align=left color=#ccccccff wrap=word ellipsis=1.0";
-		tag:  "subject"  "+ font_size=8";
-		tag:  "body"  "+ font_size=8";
+		base: "font="FONT" font_size=12 align=left color=#070707 wrap=word ellipsis=1.0";
+		tag:  "subject"  "+ font_size=12";
+		tag:  "body"  "+ font_size=10";
 		tag:  "br" "\n";
 		tag:  "b" "+ font="FONT_BOLD"";
 		tag:  "i" "+ font="FONT_ITALIC"";
