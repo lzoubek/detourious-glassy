@@ -85,6 +85,9 @@ image: "images/ibar_im1.png" COMP; /* drop arrow */
 image: "images/ibar_im2.png" COMP; /* alternate label */
 image: "images/ibar_im3.png" COMP; /* typebuffer */
 
+//~ mem
+image: "images/light_mem.png" COMP; /* typebuffer */
+
 //~ itask
 image: "images/itask_im0.png" COMP; /* bottom orientation */
 image: "images/itask_im1.png" COMP; /* top orientation */

@@ -139,5 +139,6 @@ collections {
     #include "bits/everything.edc"
     #include "bits/comp.edc"
     #include "bits/notification.edc"
+    #include "bits/light_mem.edc"
 }
 
