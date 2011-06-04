@@ -1,190 +1,370 @@
+// smoke 0.4a is mostly about this rewrite of the clock. I started by
+// wanting to rewrite it using lua but there was simply not enough
+// support (i.e., I didn't have enough time to learn it) but the
+// attempts at lua led me to a much simpler way of scrolling the clock
+// cells that wouldn't be so complicated.
+//
+// As of smoke 0.1e, a compile-time variant to allow a 24-hour clock has
+// been added. Use the following steps
+//     # edje_decc ~/.e/e/themes/smoke.edc
+//     # cd smoke
+//     # edje_cc -DHOURS24 smoke.edc -o ~/.e/e/themes/smoke24.edj
+//
+// This will leave you the original smoke.edj 12-hour clock plus
+// smoke24.edj 24-hour clock.
 
-group {
-	name: "e/modules/clock/main";
-	/* min: 64 64;
-	 * max: 170 170; */
+//#ifndef HOURS24
+//#define HOUR10_CELLS "clock/clock_hour_10.png"
+//#else
+#define HOUR10_CELLS "clock/clock_24hour_10.png"
+//#endif
 
-	script {
-		public clock_cb(val) {
-		new buf[11];
-		new year, month, day, yearday, weekday, hour, minute;
-		new Float:second;
-		new v;
 
-		date(year, month, day, yearday, weekday, hour, minute, second);
-		v = round(second);
-		timer(1.0 - (second - v), "clock_cb", 1);
-		buf[0] = 0; 
-		if (v < 10) {snprintf(buf, 10, "0%i", v);}
-		else {snprintf(buf, 10, "%i", v);}
-		set_state(PART:"seconds", buf, 0.0);
-		v = minute;
-		buf[0] = 0; 
-		if (v < 10) {snprintf(buf, 10, "0%i", v);}
-		else {snprintf(buf, 10, "%i", v);}
-		set_state(PART:"minutes", buf, 0.0);
-		v = ((hour % 12) * 5) + ((minute * 5) / 60);
-		buf[0] = 0; 
-		if (v < 10) {snprintf(buf, 10, "0%i", v);}
-		else {snprintf(buf, 10, "%i", v);}
-		set_state(PART:"hour", buf, 0.0);
-		}
-	}
+#define DIGIT_WIDTH  0.18
+#define HOUR_10_XOFF 0.0
+#define HOUR_1_XOFF  0.2
+#define COLON_XOFF   0.45
+#define MIN_10_XOFF  0.55
+#define MIN_1_XOFF   0.75
 
-	parts {
-		part {
-			name: "center";
-			type: RECT;
-			mouse_events: 0;
+#define BASE_DESCR(IMAGE, XOFF)                 \
+description { state: "default" 0.0;             \
+   image.normal: IMAGE;                         \
+   visible: 1;                                  \
+   rel1 {                                       \
+      to: "whole";                              \
+      relative: XOFF 0.0;                       \
+      offset: 0 0;                              \
+   }                                            \
+   rel2 {                                       \
+      to: "whole";                              \
+      relative: (XOFF+DIGIT_WIDTH) 11.0;        \
+      offset: -1 -1;                            \
+   }                                            \
+   color: 255 255 255 0;                        \
+}                                               \
+description { state: "reset" 0.0;               \
+   inherit: "default" 0.0;                      \
+   color: 255 255 255 255;                      \
+}
 
-			description {
-				state: "default" 0.0;
-				color: 255 0 0 0;
+#define DIGIT_DESCR(IDX, X)                             \
+description { state: "digit" IDX;                       \
+   inherit: "default" 0.0;                              \
+   rel1 {                                               \
+      relative: X (-10.0*IDX)-1.0;                      \
+      offset: 0 0;                                      \
+   }                                                    \
+   rel2 {                                               \
+      relative: (X+DIGIT_WIDTH) (-10.0*IDX)+10.0;       \
+      offset: -1 -1;                                    \
+   }                                                    \
+   color: 255 255 255 255;                              \
+}
 
-				rel1 { 
-					offset: 0 0; 
-				}
+// This sets the digit transition type and length
+#define DIGITRANS SINUSOIDAL 1
 
-				rel2 { 
-					offset: -1 -1; 
-				}
-			}
-		}
+#define CELL_TRANS(NAME,IDX,TARGET)             \
+   program { name: NAME;                        \
+   action: STATE_SET "digit" IDX;               \
+   transition: DIGITRANS;                       \
+   target: TARGET;                              \
+}
 
-		part {
-			name: "clock";
-			type: IMAGE;
+#define HOUR_10_TRANS(NAME,IDX) CELL_TRANS(NAME,IDX,"hour_10")
+#define HOUR_1_TRANS(NAME,IDX) CELL_TRANS(NAME,IDX,"hour_1")
+#define MINUTE_10_TRANS(NAME,IDX) CELL_TRANS(NAME,IDX,"min_10")
+#define MINUTE_1_TRANS(NAME,IDX) CELL_TRANS(NAME,IDX,"min_1")
 
-			description {
-				state: "default" 0.0;
-				image.normal: "clock/clock_bg.png";
-				aspect: 1.0 1.0;
-				aspect_preference: BOTH;
+group { name: "e/modules/clock/main";
 
-				rel1 { 
-					to: "center"; 
-					relative: 0.1 0.1; 
-				}
+   script {
+      public cur_hour_;
+      public m_10_;
+      public clock_cb(unused) {
+         new year, month, day, yearday, weekday, hour, minute;
+         new Float:second;
+         new h;
+         new m_mod, m_tmp;
 
-				rel2 { 
-					to: "center"; 
-					relative: 0.9 0.9; 
-				}
-			}
-		}
+         date(year, month, day, yearday, weekday, hour, minute, second);
 
-		# ifdef HAND_DESC
-		#  undef HAND_DESC
-		# endif
-		# define HAND_DESC(IND,num) \
-			description { \
-				state: num 0.0; \
-				inherit: "default" 0.0; \
-				image { \
-					normal: "clock/"IND"."cursor"."num".png"; \
-				} \
-			}
+         // It is my preference not to have a second hand so the
+         // the timer is set to go off at the top of the minute.
+         timer(61.0 - second, "clock_cb", 1);
 
-		#define HAND_PART(IND, COLOR) \
-		part { \
-			name: IND; \
-			type: IMAGE; \
-			mouse_events: 0; \
-			description { \
-				state: "default" 0.0; \
-				align: 0.5 0.5; \
-				aspect: 1.0 1.0; \
-				aspect_preference: BOTH; \
-				visible: 1; \
-				color: COLOR; \
-				rel1 { \
-					to: "center"; \
-					relative: 0.0 0.0; \
-				} \
-				rel2 { \
-					to: "center"; \
-					relative: 1.0 1.0; \
-				} \
-				image { \
-					normal: "clock/"IND"."cursor".00.png"; \
-				} \
-			} \
-			HAND_DESC(IND,"00") \
-			HAND_DESC(IND,"01") \
-			HAND_DESC(IND,"02") \
-			HAND_DESC(IND,"03") \
-			HAND_DESC(IND,"04") \
-			HAND_DESC(IND,"05") \
-			HAND_DESC(IND,"06") \
-			HAND_DESC(IND,"07") \
-			HAND_DESC(IND,"08") \
-			HAND_DESC(IND,"09") \
-			HAND_DESC(IND,"10") \
-			HAND_DESC(IND,"11") \
-			HAND_DESC(IND,"12") \
-			HAND_DESC(IND,"13") \
-			HAND_DESC(IND,"14") \
-			HAND_DESC(IND,"15") \
-			HAND_DESC(IND,"16") \
-			HAND_DESC(IND,"17") \
-			HAND_DESC(IND,"18") \
-			HAND_DESC(IND,"19") \
-			HAND_DESC(IND,"20") \
-			HAND_DESC(IND,"21") \
-			HAND_DESC(IND,"22") \
-			HAND_DESC(IND,"23") \
-			HAND_DESC(IND,"24") \
-			HAND_DESC(IND,"25") \
-			HAND_DESC(IND,"26") \
-			HAND_DESC(IND,"27") \
-			HAND_DESC(IND,"28") \
-			HAND_DESC(IND,"29") \
-			HAND_DESC(IND,"30") \
-			HAND_DESC(IND,"31") \
-			HAND_DESC(IND,"32") \
-			HAND_DESC(IND,"33") \
-			HAND_DESC(IND,"34") \
-			HAND_DESC(IND,"35") \
-			HAND_DESC(IND,"36") \
-			HAND_DESC(IND,"37") \
-			HAND_DESC(IND,"38") \
-			HAND_DESC(IND,"39") \
-			HAND_DESC(IND,"40") \
-			HAND_DESC(IND,"41") \
-			HAND_DESC(IND,"42") \
-			HAND_DESC(IND,"43") \
-			HAND_DESC(IND,"44") \
-			HAND_DESC(IND,"45") \
-			HAND_DESC(IND,"46") \
-			HAND_DESC(IND,"47") \
-			HAND_DESC(IND,"48") \
-			HAND_DESC(IND,"49") \
-			HAND_DESC(IND,"50") \
-			HAND_DESC(IND,"51") \
-			HAND_DESC(IND,"52") \
-			HAND_DESC(IND,"53") \
-			HAND_DESC(IND,"54") \
-			HAND_DESC(IND,"55") \
-			HAND_DESC(IND,"56") \
-			HAND_DESC(IND,"57") \
-			HAND_DESC(IND,"58") \
-			HAND_DESC(IND,"59") \
-		}
+         h = get_int(cur_hour_)
+         if (hour != h) {
+            set_int(cur_hour_, hour);
+#ifndef HOURS24
+            if (hour > 12) hour = hour - 12;
+            if (hour == 0) hour = 12;
+#endif
+            new htmp = hour / 10;
+            if (htmp == 0)      run_program(PROGRAM:"hour_10_0");
+            else if (htmp == 1) run_program(PROGRAM:"hour_10_1");
+            else if (htmp == 2) run_program(PROGRAM:"hour_10_2");
 
-		HAND_PART("seconds", 255 255 255 255)
-		HAND_PART("minutes", 255 255 255 255)
-		HAND_PART("hour", 255 255 255 255)
-	}
+            //
+            htmp = hour % 10;
+            if (htmp == 0)      run_program(PROGRAM:"hour_1_0");
+            else if (htmp == 1) run_program(PROGRAM:"hour_1_1");
+            else if (htmp == 2) run_program(PROGRAM:"hour_1_2");
+            else if (htmp == 3) run_program(PROGRAM:"hour_1_3");
+            else if (htmp == 4) run_program(PROGRAM:"hour_1_4");
+            else if (htmp == 5) run_program(PROGRAM:"hour_1_5");
+            else if (htmp == 6) run_program(PROGRAM:"hour_1_6");
+            else if (htmp == 7) run_program(PROGRAM:"hour_1_7");
+            else if (htmp == 8) run_program(PROGRAM:"hour_1_8");
+            else if (htmp == 9) run_program(PROGRAM:"hour_1_9");
+         }
 
-	programs {
-		program {
-			name: "init";
-			signal: "load";
-			source: "";
-			script {
-				clock_cb(0);
-			}
-		}
-	}
+         m_mod = minute % 10;
+         m_tmp = (minute - m_mod) / 10;
+         if (m_10_ != m_tmp) {
+            m_10_ = m_tmp;
+            // value from 0-5
+            if (m_10_ == 0)      run_program(PROGRAM:"min_10_0");
+            else if (m_10_ == 1) run_program(PROGRAM:"min_10_1");
+            else if (m_10_ == 2) run_program(PROGRAM:"min_10_2");
+            else if (m_10_ == 3) run_program(PROGRAM:"min_10_3");
+            else if (m_10_ == 4) run_program(PROGRAM:"min_10_4");
+            else if (m_10_ == 5) run_program(PROGRAM:"min_10_5");
+         }
+         // minutes digit is 0 .. 9
+         if (m_mod == 0)      run_program(PROGRAM:"min_1_0");
+         else if (m_mod == 1) run_program(PROGRAM:"min_1_1");
+         else if (m_mod == 2) run_program(PROGRAM:"min_1_2");
+         else if (m_mod == 3) run_program(PROGRAM:"min_1_3");
+         else if (m_mod == 4) run_program(PROGRAM:"min_1_4");
+         else if (m_mod == 5) run_program(PROGRAM:"min_1_5");
+         else if (m_mod == 6) run_program(PROGRAM:"min_1_6");
+         else if (m_mod == 7) run_program(PROGRAM:"min_1_7");
+         else if (m_mod == 8) run_program(PROGRAM:"min_1_8");
+         else if (m_mod == 9) run_program(PROGRAM:"min_1_9");
+      }
+   }
+   parts {
+      part { name: "whole";
+         type: RECT;
+         mouse_events: 1;
+         description {
+            state: "default" 0.0;
+            color: 255 255 255 0;
+            rel1 {
+               relative: 0.0 0.1;
+               offset: 0 0;
+            }
+            rel2 {
+               relative: 1.0 0.9;
+               offset: -1 -1;
+            }
+         }
+      }
+      part { name: "clipper";
+         type: RECT;
+         mouse_events: 0;
+         description {
+            rel1 {
+               to: "whole";
+               relative: 0.0 0.0;
+               offset: 0 0;
+            }
+            rel2 {
+               to: "whole";
+               relative: 1.0 1.0;
+               offset: -1 -1;
+            }
+         }
+      }
+      part { name: "hour_10";
+         type: IMAGE;
+         clip_to: "clipper";
+         BASE_DESCR(HOUR10_CELLS, HOUR_10_XOFF);
+         DIGIT_DESCR(0.0, HOUR_10_XOFF);
+         DIGIT_DESCR(0.1, HOUR_10_XOFF);
+         DIGIT_DESCR(0.2, HOUR_10_XOFF); /* only used in 24-hour clock */
+      }
+      part { name: "hour_1";
+         type: IMAGE;
+         clip_to: "clipper";
+         BASE_DESCR("clock/clock_hour_1.png", HOUR_1_XOFF);
+         DIGIT_DESCR(0.0, HOUR_1_XOFF);
+         DIGIT_DESCR(0.1, HOUR_1_XOFF);
+         DIGIT_DESCR(0.2, HOUR_1_XOFF);
+         DIGIT_DESCR(0.3, HOUR_1_XOFF);
+         DIGIT_DESCR(0.4, HOUR_1_XOFF);
+         DIGIT_DESCR(0.5, HOUR_1_XOFF);
+         DIGIT_DESCR(0.6, HOUR_1_XOFF);
+         DIGIT_DESCR(0.7, HOUR_1_XOFF);
+         DIGIT_DESCR(0.8, HOUR_1_XOFF);
+         DIGIT_DESCR(0.9, HOUR_1_XOFF);
+      }
+      part { name: "colon";
+         type: IMAGE;
+         clip_to: "clipper";
+         description {
+            state: "default" 0.0;
+            image.normal: "clock/colon.png";
+            visible: 1;
+            rel1 {
+               to: "whole";
+               relative: COLON_XOFF 0.0;
+               offset: 0 -2;
+            }
+            rel2 {
+               to: "whole";
+               relative: (COLON_XOFF+.1) 1.0;
+               offset: -1 -6;
+            }
+            color: 255 255 255 255;
+         }
+      }
+      part { name: "min_10";
+         type: IMAGE;
+         clip_to: "clipper";
+         BASE_DESCR("clock/clock_min_10.png", MIN_10_XOFF);
+         DIGIT_DESCR(0.0, MIN_10_XOFF);
+         DIGIT_DESCR(0.1, MIN_10_XOFF);
+         DIGIT_DESCR(0.2, MIN_10_XOFF);
+         DIGIT_DESCR(0.3, MIN_10_XOFF);
+         DIGIT_DESCR(0.4, MIN_10_XOFF);
+         DIGIT_DESCR(0.5, MIN_10_XOFF);
+      }
+
+      part { name: "min_1";
+         type: IMAGE;
+         clip_to: "clipper";
+         BASE_DESCR("clock/clock_min_1.png", MIN_1_XOFF);
+         DIGIT_DESCR(0.0, MIN_1_XOFF);
+         DIGIT_DESCR(0.1, MIN_1_XOFF);
+         DIGIT_DESCR(0.2, MIN_1_XOFF);
+         DIGIT_DESCR(0.3, MIN_1_XOFF);
+         DIGIT_DESCR(0.4, MIN_1_XOFF);
+         DIGIT_DESCR(0.5, MIN_1_XOFF);
+         DIGIT_DESCR(0.6, MIN_1_XOFF);
+         DIGIT_DESCR(0.7, MIN_1_XOFF);
+         DIGIT_DESCR(0.8, MIN_1_XOFF);
+         DIGIT_DESCR(0.9, MIN_1_XOFF);
+      }
+
+      part { name: "main";
+         type: RECT;
+         mouse_events: 1;
+         description {
+            state: "default" 0.0;
+            rel1 {
+               to: "whole";
+               relative: 0.0 0.0;
+               offset: 0 2;
+            }
+            rel2 {
+               to: "whole";
+               relative: 1.0 1.0;
+               offset: -1 -2;
+            }
+            color: 255 255 255 0;
+         }
+      }
+   }
+
+   programs {
+      program { name: "init";
+         signal: "load";
+         source: "";
+         script {
+            set_int(cur_hour_,-1);
+            set_int(m_10_,-1);
+            clock_cb(0);
+         }
+      }
+
+      /* Each transition happens in a similar manner. The only quirk
+       * is that on a transition to 0 a transition to "reset" is made
+       * before the actual change so that rolling always goes the same
+       * direction. (It would be simpler and still work if I didn't do
+       * this, but it looks odd on minute transitions like 19->20
+       * where '1' would roll one way to '2' and '9' would roll
+       * backwards to '0'.)
+       */
+
+      /* The tens of hours transitions */
+      program { name: "hour_10_0";
+         action: STATE_SET "reset" 0.0;
+         target: "hour_10";
+         after: "hour_10_to_zero";
+      }
+      program { name: "hour_10_to_zero";
+         action: STATE_SET "digit" 0.0;
+         transition: DIGITRANS;
+         target: "hour_10";
+      }
+      HOUR_10_TRANS("hour_10_1", 0.1);
+      HOUR_10_TRANS("hour_10_2", 0.2); /* only used in 24-hour clock */
+
+      /* The hours transitions */
+
+      program { name: "hour_1_0";
+         action: STATE_SET "reset" 0.0;
+         target: "hour_1";
+         after: "hour_1_to_zero";
+      }
+      program { name: "hour_1_to_zero";
+         action: STATE_SET "digit" 0.0;
+         transition: DIGITRANS;
+         target: "hour_1";
+      }
+      HOUR_1_TRANS("hour_1_1", 0.1);
+      HOUR_1_TRANS("hour_1_2", 0.2);
+      HOUR_1_TRANS("hour_1_3", 0.3);
+      HOUR_1_TRANS("hour_1_4", 0.4);
+      HOUR_1_TRANS("hour_1_5", 0.5);
+      HOUR_1_TRANS("hour_1_6", 0.6);
+      HOUR_1_TRANS("hour_1_7", 0.7);
+      HOUR_1_TRANS("hour_1_8", 0.8);
+      HOUR_1_TRANS("hour_1_9", 0.9);
+
+      /* The tens of minutes transitions */
+
+      program { name: "min_10_0";
+         action: STATE_SET "reset" 0.0;
+         target: "min_10";
+         after: "min_10_to_zero";
+      }
+      program { name: "min_10_to_zero";
+         action: STATE_SET "digit" 0.0;
+         transition: DIGITRANS;
+         target: "min_10";
+      }
+      MINUTE_10_TRANS("min_10_1", 0.1);
+      MINUTE_10_TRANS("min_10_2", 0.2);
+      MINUTE_10_TRANS("min_10_3", 0.3);
+      MINUTE_10_TRANS("min_10_4", 0.4);
+      MINUTE_10_TRANS("min_10_5", 0.5);
+
+      /* The minute transitions */
+
+      program { name: "min_1_0";
+         action: STATE_SET "reset" 0.0;
+         target: "min_1";
+         after: "min_1_to_zero";
+      }
+      program { name: "min_1_to_zero";
+         action: STATE_SET "digit" 0.0;
+         transition: DIGITRANS;
+         target: "min_1";
+      }
+      /* */
+      MINUTE_1_TRANS("min_1_1", 0.1);
+      MINUTE_1_TRANS("min_1_2", 0.2);
+      MINUTE_1_TRANS("min_1_3", 0.3);
+      MINUTE_1_TRANS("min_1_4", 0.4);
+      MINUTE_1_TRANS("min_1_5", 0.5);
+      MINUTE_1_TRANS("min_1_6", 0.6);
+      MINUTE_1_TRANS("min_1_7", 0.7);
+      MINUTE_1_TRANS("min_1_8", 0.8);
+      MINUTE_1_TRANS("min_1_9", 0.9);
+   }
 }
 
