@@ -397,10 +397,14 @@
 
 
 group {
+#if BUILD_FOR_COMPOSITE
+    name: "e/widgets/border/classic/border";
+#else
     name: "e/widgets/border/default/border";
     alias: "e/widgets/border/urgent/border";
     alias: "e/widgets/border/wm_app/border";
     alias: "e/widgets/border/dialog/border";
+#endif
 
 	BORDER_DATA;
 
@@ -443,7 +447,7 @@ group {
 
 	parts {
 		BORDER_SHADOW(40);
-		BORDER_COLOR("images/window-border-color.png", 6 6 23 2, 25 25);
+		BORDER_COLOR("images/window-border-glass.png", 6 6 23 2, 25 25);
 		BORDER_IMAGE("images/window-border.png", 6 6 23 2, 25 25);
 		BORDER_CLIENT(LEFT, RIGHT, TOP, BOTTOM);
 
@@ -525,7 +529,10 @@ group {
 #define BOTTOM -6
 
 group {
-    name: "e/widgets/border/glass/border";
+    name: "e/widgets/border/default/border";
+    alias: "e/widgets/border/urgent/border";
+    alias: "e/widgets/border/wm_app/border";
+    alias: "e/widgets/border/dialog/border";
 
 	BORDER_DATA;
 
