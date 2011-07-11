@@ -3899,7 +3899,7 @@ group {
 
 group {
 	name: "e/fileman/default/scrollframe";
-	alias: "e/fileman/desktop/scrollframe";
+//	alias: "e/fileman/desktop/scrollframe";
 
 	parts {
 		part {
