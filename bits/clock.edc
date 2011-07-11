@@ -13,11 +13,11 @@
 // This will leave you the original smoke.edj 12-hour clock plus
 // smoke24.edj 24-hour clock.
 
-#ifndef HOURS24
-#define HOUR10_CELLS "clock/clock_hour_10.png"
-#else
+//#ifndef HOURS24
+//#define HOUR10_CELLS "clock/clock_hour_10.png"
+//#else
 #define HOUR10_CELLS "clock/clock_24hour_10.png"
-#endif
+//#endif
 
 
 #define DIGIT_WIDTH  0.18
