@@ -1,0 +1,13 @@
+detourious-glassy is enlightenment E17 theme. 
+
+It is a fork based on detourious theme originally developed in http://svn.enlightenment.org/svn/e/trunk/THEMES/detourious/
+
+Diffrences:
+ * glassy border is default for all windows/dialogs
+ * notification module has glassy background
+ * glassy shelf background as alternate shelf background
+ * imported various module themes (mem)
+
+Installation:
+
+make && make install
