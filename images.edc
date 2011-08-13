@@ -131,6 +131,7 @@ image: "images/shelf_def_im0.png" COMP; /* regular orientation */
 image: "images/shelf_def_im1.png" COMP; /* left orientation */
 image: "images/shelf_def_im2.png" COMP; /* right orientation */
 image: "images/shelf_def_im3.png" COMP; /* inset */
+image: "images/shelf_def_im4.png" COMP; /* inset */
 image: "images/shelf_alt_im0.png" COMP; /* all */
 
 //~ busy cursor
@@ -235,6 +236,8 @@ image: "images/efmnav_bt7.png" COMP;	/* forward button symbol */
 image: "images/efmnav_bt8.png" COMP;	/* up button symbol */
 image: "images/efmnav_bt9.png" COMP;	/* refresh button symbol */
 image: "images/efmnav_bt10.png" COMP;	/* favorites button symbol */
+image: "images/efmnav_bt11.png" COMP;	/* pathbar button */
+image: "images/efmnav_bt12.png" COMP;	/* pathbar button */
 
 //~ slider
 image: "images/slider_im0.png" COMP; /* horizontal slider */

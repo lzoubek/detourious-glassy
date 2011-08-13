@@ -533,6 +533,7 @@ group {
     alias: "e/widgets/border/urgent/border";
     alias: "e/widgets/border/wm_app/border";
     alias: "e/widgets/border/dialog/border";
+    alias: "e/widgets/border/internal_fileman/border";
 
 	BORDER_DATA;
 
